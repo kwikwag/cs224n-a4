@@ -373,7 +373,7 @@ class NMT(nn.Module):
 
         dec_state = self.decoder(Ybar_t, dec_state)  # (b, e + h) => (b, h), (b, h)
         dec_hidden, dec_cell = dec_state  # (b, h)
-        e_t = torch.bmm(enc_hiddens_proj, torch.unsqueeze(dec_hidden, 2))  # (b, sec_len, h) x (b, h, 1) => (b, src_len)
+        e_t = torch.bmm(enc_hiddens_proj, torch.unsqueeze(dec_hidden, 2)).squeeze()  # (b, sec_len, h) x (b, h, 1) => (b, src_len)
 
         ### END YOUR CODE
 
@@ -408,11 +408,20 @@ class NMT(nn.Module):
         ###     Tanh:
         ###         https://pytorch.org/docs/stable/torch.html#torch.tanh
 
+        # Question 1g: First explain (in around three sentences) what effect the masks have on the entire attention 
+        # computation. Then explain (in one or two sentences) why it is necessary to use the masks in this way.
+        # Answer:
+        #  This sets a value of -inf for encoder attention inputs at '<pad>' positions.
+        #  It will cause the softmax function to effectively ignore these entries.
+        #  Consequently, it will prevents gradient updates to parameters corresponding to these positions.
+        #  This is necessary in order to prevent padding from affecing the parameters, so that only
+        #  true words affect model parameters.
+
         alpha_t = nn.functional.softmax(e_t)  # (b, src_len)
-        a_t = torch.bmm(alpha_t.unsqueeze(1), enc_hiddens) # (b, 1, src_len) * (b, src_len, 2*h) => (b, 2*h)
+        a_t = torch.bmm(alpha_t.unsqueeze(1), enc_hiddens).squeeze() # (b, 1, src_len) * (b, src_len, 2*h) => (b, 2*h)
         U_t = torch.cat((a_t, dec_hidden), 1) # (b, 2*h) + (b, h) -> (b, 3*h)
         V_t = self.combined_output_projection(U_t)
-        O_t = self.dropout(nn.functional.tanh(V_t))
+        O_t = self.dropout(torch.tanh(V_t))
 
         ### END YOUR CODE
 
