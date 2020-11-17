@@ -286,9 +286,34 @@ class NMT(nn.Module):
         ###         https://pytorch.org/docs/stable/torch.html#torch.stack
 
 
+        # 1. Apply the attention projection layer to `enc_hiddens` to obtain `enc_hiddens_proj`,
+        #     which should be shape (b, src_len, h),
+        #     where b = batch size, src_len = maximum source length, h = hidden size.
+        #     This is applying W_{attProj} to h^enc, as described in the PDF.
+        enc_hiddens_proj = self.att_projection(enc_hiddens)  # (2*h, h) x (b, src_len, h*2) => (b, src_len, h)
 
+        # 2. Construct tensor `Y` of target sentences with shape (tgt_len, b, e) using the target model embeddings.
+        #     where tgt_len = maximum target sentence length, b = batch size, e = embedding size.
+        Y = self.model_embeddings.target(target_padded)  # (tgt_len, b) => (tgt_len, b, e)
 
+        # 3. Use the torch.split function to iterate over the time dimension of Y.
+        #     Within the loop, this will give you Y_t of shape (1, b, e) where b = batch size, e = embedding size.
+        #         - Squeeze Y_t into a tensor of dimension (b, e). 
+        #         - Construct Ybar_t by concatenating Y_t with o_prev on their last dimension
+        #         - Use the step function to compute the the Decoder's next (cell, state) values
+        #           as well as the new combined output o_t.
+        #         - Append o_t to combined_outputs
+        #         - Update o_prev to the new o_t.
+        for Y_t in torch.split(Y):
+            Ybar_t = torch.cat((Y_t.squeeze(), o_prev))
+            dec_state, o_t, _ = self.step(Ybar_t, dec_state, enc_hiddens, enc_hiddens_proj, enc_masks)
+            combined_outputs.append(o_t)
+            o_prev = o_t
 
+        # 4. Use torch.stack to convert combined_outputs from a list length tgt_len of
+        #     tensors shape (b, h), to a single tensor shape (tgt_len, b, h)
+        #     where tgt_len = maximum target sentence length, b = batch size, h = hidden size.
+        combined_outputs = torch.stack(combined_outputs)
 
         ### END YOUR CODE
 
