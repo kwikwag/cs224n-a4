@@ -304,7 +304,7 @@ class NMT(nn.Module):
         #           as well as the new combined output o_t.
         #         - Append o_t to combined_outputs
         #         - Update o_prev to the new o_t.
-        for Y_t in torch.split(Y):
+        for Y_t in torch.split(Y, 1):
             Ybar_t = torch.cat((Y_t.squeeze(), o_prev))
             dec_state, o_t, _ = self.step(Ybar_t, dec_state, enc_hiddens, enc_hiddens_proj, enc_masks)
             combined_outputs.append(o_t)
